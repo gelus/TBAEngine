@@ -80,10 +80,4 @@ input.onkeyup = function(e){
 }
 
 log(G.currentRoom.getDescription(), true);
-log("look at the light");
-log("flip switch");
-log("look light");
-log("hit switch");
-log("look light");
-log("look");
-log("look bug");
+
