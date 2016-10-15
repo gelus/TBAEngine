@@ -1,0 +1,1 @@
+{"version":3,"sources":["../src/test.js"],"names":[],"mappings":";;AAAA,IAAI,QAAQ,OAAZ;AACA,IAAI,qBAAmB,KAAnB,WAAJ","file":"dist.js","sourcesContent":["var other = \"OTHER\";\nvar myString = `this ${other} thing`;\n"]}

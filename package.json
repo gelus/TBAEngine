@@ -1,0 +1,26 @@
+{
+  "name": "tbaengine",
+  "version": "0.0.1",
+  "description": "A text based Adventure Game engine",
+  "main": "index.js",
+  "scripts": {
+    "build": "npm run build-dev; npm run build-prod",
+    "build-dev": "./node_modules/.bin/babel src/TBAEngine.js -o dist/TBAEngine.js --source-maps",
+    "build-prod": "./node_modules/.bin/babel src/TBAEngine.js -o dist/TBAEngine.min.js --minified",
+    "dev-watch": "./node_modules/.bin/babel src/TBAEngine.js -o dist/TBAEngine.js --source-maps -w"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gelus/TBAEngine.git"
+  },
+  "author": "Benjamin Miller",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/gelus/TBAEngine/issues"
+  },
+  "homepage": "https://github.com/gelus/TBAEngine#readme",
+  "devDependencies": {
+    "babel-cli": "^6.16.0",
+    "babel-preset-es2015": "^6.16.0"
+  }
+}
