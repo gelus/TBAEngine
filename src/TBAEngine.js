@@ -1,4 +1,5 @@
 (function(){
+
   var directionMap = {
     "n": "north",
     "s": "south",
@@ -55,32 +56,26 @@
     },
 
     addRoom(descriptor) {
-      this.rooms[descriptor.title] = new Room(descriptor, this);
+      this.rooms[descriptor.key] = new Room(descriptor, this);
+    },
+
+    createItem(descriptor) {
+      return new Item(descriptor, null, this);
     },
 
     findTarget(input) {
-      var targetKey = this.currentRoom.itemList[this.currentRoom.itemList.findIndex(function(e){
-        return this.items[e].accessor.test(input);
-      }.bind(this.currentRoom))];
-
-      if(targetKey) return this.currentRoom.items[targetKey];
-
-      var targetKey = this.inventoryList[this.inventoryList.findIndex(function(e){
-        return this.inventory[e].accessor.test(input);
-      }.bind(this))];
-      return this.inventory[targetKey];
+      var targets = 
+        this.currentRoom.itemList.filter(e=>this.currentRoom.items[e].accessor.test(input)).map(e=>this.currentRoom.items[e])
+        .concat(this.inventoryList.filter(e=>this.inventory[e].accessor.test(input)).map(e=>this.inventory[e]));
+      
+      if(targets.length > 1) targets = targets.filter(e=>!!e.getCommand(input));
+        
+      return targets[0];
     },
 
     enterRoom(room){
       this.currentRoom = room;
       return room.getDescription();
-    },
-
-    dropItem(item){
-      if(this.inventory[item.key]){
-        this.currentRoom.addItem(item);
-        delete this.inventory[item.key]; 
-      }
     },
 
     globalCommands : [
@@ -133,8 +128,6 @@
     get(){return Object.keys(this.inventory)}
   });
 
-
-
   // Room construction -------------
 
   function Room(descriptor, game) {
@@ -185,7 +178,6 @@
     get(){ return Object.keys(this.exits); }
   });
 
-
   // Object construction --------------
 
   function Item(descriptor, room, game) {
@@ -212,6 +204,13 @@
 
     getCommand(input){
       return this.actions[this.actions.findIndex(e=>e.command.test(input))];
+    },
+    
+    drop(){
+      if(this.game.inventory[this.key]){
+        this.game.currentRoom.addItem(this);
+        delete this.game.inventory[this.key]; 
+      }
     }
 
   }

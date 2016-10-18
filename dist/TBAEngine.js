@@ -1,6 +1,7 @@
 "use strict";
 
 (function () {
+
   var directionMap = {
     "n": "north",
     "s": "south",
@@ -58,29 +59,33 @@
       this.conditions.push(condition);
     },
     addRoom: function addRoom(descriptor) {
-      this.rooms[descriptor.title] = new Room(descriptor, this);
+      this.rooms[descriptor.key] = new Room(descriptor, this);
+    },
+    createItem: function createItem(descriptor) {
+      return new Item(descriptor, null, this);
     },
     findTarget: function findTarget(input) {
-      var targetKey = this.currentRoom.itemList[this.currentRoom.itemList.findIndex(function (e) {
-        return this.items[e].accessor.test(input);
-      }.bind(this.currentRoom))];
+      var _this = this;
 
-      if (targetKey) return this.currentRoom.items[targetKey];
+      var targets = this.currentRoom.itemList.filter(function (e) {
+        return _this.currentRoom.items[e].accessor.test(input);
+      }).map(function (e) {
+        return _this.currentRoom.items[e];
+      }).concat(this.inventoryList.filter(function (e) {
+        return _this.inventory[e].accessor.test(input);
+      }).map(function (e) {
+        return _this.inventory[e];
+      }));
 
-      var targetKey = this.inventoryList[this.inventoryList.findIndex(function (e) {
-        return this.inventory[e].accessor.test(input);
-      }.bind(this))];
-      return this.inventory[targetKey];
+      if (targets.length > 1) targets = targets.filter(function (e) {
+        return !!e.getCommand(input);
+      });
+
+      return targets[0];
     },
     enterRoom: function enterRoom(room) {
       this.currentRoom = room;
       return room.getDescription();
-    },
-    dropItem: function dropItem(item) {
-      if (this.inventory[item.key]) {
-        this.currentRoom.addItem(item);
-        delete this.inventory[item.key];
-      }
     },
 
 
@@ -161,14 +166,14 @@
       delete this.items[key];
     },
     getDescription: function getDescription() {
-      var _this = this;
+      var _this2 = this;
 
       var ret = [this.description];
       ret = ret.concat(this.itemList.map(function (x) {
-        return _this.items[x].description;
+        return _this2.items[x].description;
       }));
       ret = ret.concat(this.exitList.map(function (x) {
-        return _this.exits[x].description;
+        return _this2.exits[x].description;
       }));
       return ret.join(" ");
     }
@@ -213,6 +218,12 @@
       return this.actions[this.actions.findIndex(function (e) {
         return e.command.test(input);
       })];
+    },
+    drop: function drop() {
+      if (this.game.inventory[this.key]) {
+        this.game.currentRoom.addItem(this);
+        delete this.game.inventory[this.key];
+      }
     }
   };
 })();

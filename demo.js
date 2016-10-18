@@ -6,7 +6,7 @@ G.addCondition({
 });
 
 G.addRoom({
-  title: "AllyEnd",
+  key: "AllyEnd",
   description: "You're in the closed end of an ally.",
   actions: [
     {command: /xyz/, method: function (){
@@ -16,12 +16,12 @@ G.addRoom({
 });
 
 G.addRoom({
-  title: "Ally",
+  key: "Ally",
   description: "The ally is thin, the exit is blocked."
 });
 
 G.addRoom({
-  title: "Hell",
+  key: "Hell",
   description: "You stand on brimstone and fire.",
   actions: [
     {command: /xyz/, method: function (){
@@ -66,7 +66,7 @@ G.rooms.AllyEnd.addItem({
 G.rooms.AllyEnd.addItem({
   key: "light",
   description: "A light is mounted on the wall.",
-  detail: function(){ return "The light is "+ this.state+"." },
+  detail: function(){ return "The light is "+ (this.broken? "broken":this.state)+"." },
   state: "off",
   actions: [
     {command: /look/, method: function(){
@@ -83,14 +83,14 @@ G.rooms.Ally.addItem({
   description: "There is a switch.",
   detail: "It probably controls a light.",
   actions: [
-    {command: /flip|turn|hit/, method: function(){
+    {command: /use|flip|turn|hit/, method: function(){
       this.game.rooms.AllyEnd.items.light.state = this.game.rooms.AllyEnd.items.light.state === "on"? "off":"on";
       return "You flip the switch " + this.game.rooms.AllyEnd.items.light.state +".";
     }},
   ]
 });
 
-G.rooms.Hell.addItem({
+G.rooms.AllyEnd.addItem({
   key: "rock",
   description: "A sizeable rock sits on the ground.",
   detail: "It is about the size of two fists.",
@@ -100,6 +100,21 @@ G.rooms.Hell.addItem({
         this.room.takeItem(this);
         return "rock taken";
       }
+    }},
+    {command: /^throw rock(.*)/, method: function(){
+      if(this.room) return "You are not holding the rock.";
+      var targetText = this.game.regExpMatchs.targetCommand[1];
+      var target = this.game.findTarget(targetText);
+      this.drop();
+      if(target === this.game.currentRoom.items.light){
+        this.game.currentRoom.items.light.broken = true;
+        return "The rock hits the light. The light shatters.";
+      }
+      else if(target === demon) {
+        return "You throw the rock at the demon. \n"+demon.hitWithRock();
+      } 
+      else if(targetText.length) return "You throw the rock, and miss.";
+      else return "You throw the rock."
     }}
   ]
 });
@@ -110,7 +125,7 @@ G.rooms.Hell.addItem({
   detail: 'The inscriptions reads: "Release it. Like a moth to the flame."'
 });
 
-var bug = {
+var bug = G.createItem({
   key: "bug",
   accessor: /bug|moth/,
   description: "A bug is flying around.",
@@ -123,7 +138,7 @@ var bug = {
       this.room.removeItem(this.key);
       return "You "+this.game.regExpMatchs.targetCommand[0]+" the "+this.game.regExpMatchs.target[0]+" between your palms."
     }},
-    {command: /catch/, method: function(){
+    {command: /catch|take/, method: function(){
       if(this.room) {
         this.room.takeItem(this);
         return "You catch the bug";
@@ -137,22 +152,27 @@ var bug = {
         this.game.currentRoom.addItem(demon);
         return "The moth is drawn to the fire. In a quick flash the moth is burnt up. A demon is drawn to the ashes.";
       }
-      this.game.dropItem(this);
+      this.drop();
       return "You release the bug";
     }}
   ]
-}
+});
 
-var demon = {
+var demon = G.createItem({
   key: "demon",
   description: "The demon snarls and hisses at you.",
   detail: "It looks dangerous.",
   init: function(){
     var G = this.game;
-    setTimeout(function(){
+    this.sneakUpOnYouTimer = setTimeout(function(){
       G.dead = true;
       log("The demon sneaks up behind you and rakes it claws across you throat. It laps up your life blood as it spills from you.", true);
-    }, 5000);
+    }, 15000);
+  },
+  hitWithRock: function(){
+    clearTimeout(this.sneakUpOnYouTimer);
+    delete this.room.items.demon;
+    return "The Demon shrieks and runs away."
   },
   actions: [
     {command: /kill|hit|attack/, method: function(){
@@ -164,7 +184,7 @@ var demon = {
       return "You tried to <i>take</i> a demon!?\nThe demon snatches your wrist as you reach out and rips your arm from your shoulder.\nThink about what you did while you bleed to death.";
     }},
   ]
-}
+});
 
 var input = document.getElementById('Input');
 var outputElm = document.getElementById('Output');
