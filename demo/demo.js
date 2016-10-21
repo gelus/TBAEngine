@@ -93,7 +93,7 @@ G.rooms.Ally.addItem({
   ]
 });
 
-G.rooms.AllyEnd.addItem({
+G.rooms.Ally.addItem({
   key: "rock",
   description: "A sizeable rock sits on the ground.",
   detail: "It is about the size of two fists.",
