@@ -9,6 +9,8 @@
     "e": "east"
   };
 
+  var validGetters = ['detail', 'description', 'accessor'];
+
   window.TBAEngine = function TBAEngine() {
 
     this.currentRoom = null;
@@ -144,6 +146,11 @@
     this.items = {};
     this.exits = {};
     this.game = game || null;
+
+    for (var i = 0, l = validGetters.length; i < l; i++) {
+      var e = validGetters[i];
+      if (typeof this[e] === 'function') Object.defineProperty(this, e, { get: this[e] });
+    }
   }
 
   Room.prototype = {
@@ -201,16 +208,13 @@
     this.game = game || null;
     this.room = room || null;
 
-    for (var i = 0, l = this.validGetters.length; i < l; i++) {
-      var e = this.validGetters[i];
+    for (var i = 0, l = validGetters.length; i < l; i++) {
+      var e = validGetters[i];
       if (typeof this[e] === 'function') Object.defineProperty(this, e, { get: this[e] });
     }
   }
 
   Item.prototype = {
-
-    validGetters: ['detail', 'description', 'accessor'],
-
     getDescription: function getDescription() {
       return this.description;
     },

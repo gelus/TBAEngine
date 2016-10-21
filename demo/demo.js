@@ -7,7 +7,10 @@ G.addCondition({
 
 G.addRoom({
   key: "AllyEnd",
-  description: "You're in the closed end of an ally.",
+  description: function(){
+    var extra = this.items.light.state == "on" ? " The ally is bathed in light.":"";
+    return "You're in the closed end of an ally." + extra;
+  },
   actions: [
     {command: /xyz/, method: function (){
       return "There is a blinding flash.\n" + G.enterRoom(G.rooms.Hell);
@@ -212,7 +215,7 @@ function log (c, direct) {
   console.log(output);
 }
 
-input.onkeyup = function(e){
+input.onkeyup = function(e) {
   if (e.keyCode == 13){
     log(this.value)
     this.select();
