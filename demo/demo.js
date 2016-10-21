@@ -209,7 +209,7 @@ function log (c, direct) {
   oup.classList.add('output');
   elm.appendChild(oup)
 
-  outputElm.prepend(elm);
+  outputElm.insertBefore(elm, outputElm.firstChild);
   
   console.warn(c);
   console.log(output);
