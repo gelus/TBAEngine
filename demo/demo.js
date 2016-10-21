@@ -207,7 +207,7 @@ function log (c, direct) {
   var oup = document.createElement('p');
   oup.innerHTML = output;
   oup.classList.add('output');
-  elm.append(oup)
+  elm.appendChild(oup)
 
   outputElm.prepend(elm);
   
