@@ -201,7 +201,7 @@ function log (c, direct) {
     var inp = document.createElement('p');
     inp.textContent = "> "+c;
     inp.classList.add('input');
-    elm.append(inp)
+    elm.appendChild(inp)
   }
 
   var oup = document.createElement('p');
