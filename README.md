@@ -20,15 +20,17 @@ Creates a new game instance.
  
 | property | type | description | 
 | --- | --- | --- | 
-| rooms | Object | Rooms assigned in the current game. | 
-| currentRoom | Object | The room that the player is currently in. | 
-| inventory | Object | The objects in the player's inventory | 
-| invalidCommand | String | The message returned when the player enters an invalid command | 
+| actions | Array of objects | A list global commands | 
 | conditions | Array | a list of conditions that need to be met for a command to be processed | 
-| regExpMatchs | Object | Information on the regular expression matches for the last command | 
-| globalCommands | Array of objects | A list global commands | 
+| currentRoom | Object | The room that the player is currently in. | 
+| emptyInventory | String | The message returned from the default `inventory` command when the player checks an empty inventory | 
+| invalidCommand | String | The message returned when the player enters an invalid command | 
+| invalidExit | String | The message returned from the default `go` command when the player trys to _go_ somewhere invalid | 
+| inventory | Object | The objects in the player's inventory | 
 | inventoryList | Array of strings | List of keys in the inventory object | 
+| regExpMatchs | Object | Information on the regular expression matches for the last global command | 
 | roomList | Array of strings | List of keys in the rooms object | 
+| rooms | Object | Rooms assigned in the current game. | 
  
 ##### Game.input(String command) 
   *_The command_* Inputs a text command, evaluates it and returns the output. 
@@ -40,19 +42,19 @@ Creates a new game instance.
    
 | property | type | description | 
 | ---- | ---- | ---- | 
-| failText | String | The Text returned if the condition fails | 
 | check | Function | The condition fails if falsey is returned and passes if truethy is return | 
+| failText | String | The Text returned if the condition fails | 
    
-##### Game.addRomm(Object roomDescriptor) 
+##### Game.addRoom(Object roomDescriptor) 
   Add a new room to the game. Room is added to Game.rooms 
  
   roomDescriptor 
  
 | property | type | description | 
 | --- | --- | --- | 
-| key |  String | The name of the room. This is the key the Room will be assigned under on `Game.rooms` | 
-| description | String or Function | The value, or returned value of which will describe the room | 
 | actions | Array of commandDescriptors | A list of commands available when in the room | 
+| description | String or Function | The value, or returned value of which will describe the room | 
+| key |  String | The name of the room. This is the key the Room will be assigned under on `Game.rooms` | 
  
 _ Any other fields will be directly assigned to the Room when created _ 
  
@@ -61,14 +63,24 @@ _ Any other fields will be directly assigned to the Room when created _
   Returns: Item 
  
   itemDescriptor : see Room.addItem 
+
+##### Game.findTargets(String commandInput, <Array targets>) 
+  Checks passed in input against items in the current room, inventory to return an array of matching target.
+  Returns: Array of targets 
   
 ##### Game.findTarget(String commandInput) 
-  Checks passed in input against items in the current room and inventory to return the matching target. 
+  Uses Game.findTargets to get the first matching target in the current room or inventory
   Returns: Item 
    
 ##### Game.enterRoom(Room room) 
   Assigns the passed in room to the currentRoom and returns the new rooms description. 
   Returns: String room description 
+
+##### Game.addGlobalCommand(Object commandDescriptor) 
+  adds the passed in command go Game.actions
+
+##### Game.removeGlobalCommand(String input) 
+  removes the first matching command from Game.actions
  
  
 ## Room 
@@ -81,11 +93,12 @@ Creates a room or area for your game and adds it under `descriptor.key` to `Game
  
 | property | type | description | 
 | --- | --- | --- | 
-| items | Object | Items assigned to the room | 
+| exitList | Array of strings | List of keys in the exits object | 
 | exits | Object | Exits assigned to the room | 
 | game | Game object | A reference to the Game the room was created on. | 
 | itemList | Array of strings | List of keys in the items object | 
-| exitList | Array of strings | List of keys in the exits object | 
+| items | Object | Items assigned to the room | 
+| regExpMatchs | Object | Information on the regular expression matches for the last room level command | 
  
 _all other fields on the descriptor will be directly assigned to the Room._ 
  
@@ -96,12 +109,13 @@ _all other fields on the descriptor will be directly assigned to the Room._
  
 | property | type | description | 
 | --- | --- | --- | 
-| key |  String | The name of the item. This is the key the Item will be assigned under on `Room.items` | 
-| accessor | Regular Expression | The expression that inputs will be checked against. If not provided, one is created using the key. | 
+| accessor | Regular Expression | Optional. The expression that inputs will be checked against. If not provided, one is created using the key. | 
+| actions | Array of commandDescriptors | A list of commands available when in the room | 
 | description | String or Function | The value, or returned value of which will describe the item | 
 | detail | String or Function | The value, or returned value of which will describe the item in more detail | 
-| actions | Array of commandDescriptors | A list of commands available when in the room | 
 | init | Function | A initialization method, called when the item is added to a room. | 
+| key |  String | The name of the item. This is the key the Item will be assigned under on `Room.items` | 
+| name | String | A user friendly name for the item. If unprovided Item.name will be set to Item.key | 
  
  
 _all other fields on the descriptor will be directly assigned to the Room._ 
@@ -113,9 +127,10 @@ _all other fields on the descriptor will be directly assigned to the Room._
    
 | property | type | description | 
 | ---- | ---- | ---- | 
-| direction | String | The "direction" the exit is in. What the player will enter with the global _go_ command | 
-| room | Room | The Room the exit leads to | 
+| accessor | regular expression | Optional. The expression that inputs will be checked against. If not provided, one is created using the direction. | 
 | description | String | the description of the exit. | 
+| key | String | The "direction" the exit is in. |
+| room | Room | The Room the exit leads to | 
  
 ##### Room.takeItem(Item) 
   Convenience method. Adds Item to `Game.inventory` and removes it from the Room. 
@@ -130,7 +145,7 @@ _all other fields on the descriptor will be directly assigned to the Room._
     - all exits descriptions 
   Returns : string 
    
-## Room 
+## Item 
 ```javascript 
 var myItem = Game.createItem(Object itemDescriptor); 
  
@@ -142,6 +157,7 @@ Room.addItem(Object itemDescriptor);
 | --- | --- | --- | 
 | game | Game | reference to the Game the item was created in. | 
 | room | Room | reference to the Room the item is in ( `null` if item is in inventory, or not added to a room ) | 
+| regExpMatchs | Object | Information on the regular expression matches for the last item command | 
  
 ##### Item.getDescription() 
   returns the description of the item 

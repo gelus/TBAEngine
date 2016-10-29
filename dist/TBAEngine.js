@@ -1,15 +1,8 @@
-"use strict";
+'use strict';
 
 (function () {
 
-  var directionMap = {
-    "n": "north",
-    "s": "south",
-    "w": "west",
-    "e": "east"
-  };
-
-  var validGetters = ['detail', 'description', 'accessor'];
+  var validGetters = ['detail', 'description', 'accessor', 'name'];
 
   window.TBAEngine = function TBAEngine() {
 
@@ -17,9 +10,10 @@
     this.rooms = {};
     this.inventory = {};
     this.invalidCommand = "Invalid Command";
+    this.invalidExit = "Cannot go there";
     this.emptyInventory = "Empy inventory";
-    this.regExpMatchs = {};
     this.conditions = [];
+    this.actions = [];
   };
 
   TBAEngine.prototype = {
@@ -34,23 +28,25 @@
       if (ret.length) return ret.join(" ");
 
       var input = input.toLocaleLowerCase();
-      var globalCommand = this.globalCommands[this.globalCommands.findIndex(function (e) {
-        return e.command.test(input);
-      })];
-      var roomCommand = this.currentRoom.actions ? this.currentRoom.actions[this.currentRoom.actions.findIndex(function (e) {
-        return e.command.test(input);
-      })] : undefined;
-      var target = this.findTarget(input);
-      var targetCommand = target && target.getCommand(input);
 
-      this.regExpMatchs.globalCommand = globalCommand ? globalCommand.command.exec(input) : null;
-      this.regExpMatchs.roomCommand = roomCommand ? roomCommand.command.exec(input) : null;
-      this.regExpMatchs.target = target ? target.accessor.exec(input) : null;
-      this.regExpMatchs.targetCommand = targetCommand ? targetCommand.command.exec(input) : null;
+      // get a list of targets including the game and current room
+      var targets = this.findTargets(input, [this, this.currentRoom]);
 
-      if (globalCommand) ret.push(globalCommand.method.call(this, target));
-      if (roomCommand) ret.push(roomCommand.method.call(this.currentRoom));
-      if (targetCommand) ret.push(targetCommand.method.call(target));
+      // call commands on targets
+      for (var _i = 0, il = targets.length; _i < il; _i++) {
+        var target = targets[_i];
+        if (!target.actions) continue;
+        for (var j = 0, jl = target.actions.length; j < jl; j++) {
+          var action = target.actions[j];
+          if (action.command.test(input)) {
+            target.regExpMatchs = {
+              target: target.accessor ? target.accessor.exec(input) : null,
+              command: action.command.exec(input)
+            };
+            ret.push(action.method.call(target));
+          }
+        }
+      }
 
       var output = ret.filter(function (n) {
         return !!n;
@@ -66,76 +62,46 @@
     createItem: function createItem(descriptor) {
       return new Item(descriptor, null, this);
     },
-    findTarget: function findTarget(input) {
+    findTargets: function findTargets(input, targets) {
       var _this = this;
 
-      var targets = this.currentRoom.itemList.filter(function (e) {
+      return (targets || []).concat(this.currentRoom.itemList.filter(function (e) {
         return _this.currentRoom.items[e].accessor.test(input);
       }).map(function (e) {
         return _this.currentRoom.items[e];
-      }).concat(this.inventoryList.filter(function (e) {
+      }), this.inventoryList.filter(function (e) {
         return _this.inventory[e].accessor.test(input);
       }).map(function (e) {
         return _this.inventory[e];
       }));
-
-      if (targets.length > 1) targets = targets.filter(function (e) {
-        return !!e.getCommand(input);
-      });
-
-      return targets[0];
+    },
+    findTarget: function findTarget(input) {
+      return this.findTargets(input)[0];
     },
     enterRoom: function enterRoom(room) {
       this.currentRoom = room;
       return room.getDescription();
     },
-
-
-    globalCommands: [{ command: /^look(.*)/, method: function method(target) {
-        if (!target) {
-          var query = this.regExpMatchs.globalCommand[1].trim();
-          if (query.length) return "Nothing interesting";else target = this.currentRoom;
-        }
-        return target.detail || target.getDescription();
-      }
-    }, { command: /^(go|g)\s(.*)/, method: function method() {
-        var direction = this.regExpMatchs.globalCommand[2];
-        if (/^[nesw]$/.test(direction)) direction = directionMap[direction];
-
-        for (var key in this.currentRoom.exits) {
-          if (this.currentRoom.exits.hasOwnProperty(key)) {
-            if (this.currentRoom.exits[key].accessor.test(direction)) return this.enterRoom(this.currentRoom.exits[key].room);
-          }
-        }
-
-        return "Cannot go there.";
-      }
-    }, { command: /take/, method: function method(target) {
-        if (!target || !target.getCommand("take")) return "Cannot take that.";
-        if (this.inventory[target.key]) return target.key + " already taken";
-      }
-    }, { command: /^drop(.*)/, method: function method(target) {
-        if (!target) {
-          var query = this.regExpMatchs[1].trim();
-          if (!query.length) return "Drop what?";else return "You're not carrying that.";
-        }
-        if (!target.getCommand("drop")) {
-          if (!this.inventory[target.key]) return "You're not carrying that.";else {
-            this.dropItem(target);
-            return target.key + " dropped.";
-          }
-        }
-      }
-    }, { command: /inventory/, method: function method() {
-        return this.inventoryList.length ? this.inventoryList.join("\n") : this.emptyInventory;
-      }
-    }]
-
+    addGlobalCommand: function addGlobalCommand(descriptor) {
+      this.actions.push(descriptor);
+    },
+    removeGlobalCommand: function removeGlobalCommand(input) {
+      var index = this.actions.findIndex(function (e) {
+        return e.command.test(input);
+      });
+      this.actions.splice(index, 1);
+    }
   };
 
   Object.defineProperty(TBAEngine.prototype, "inventoryList", {
     get: function get() {
       return Object.keys(this.inventory);
+    }
+  });
+
+  Object.defineProperty(TBAEngine.prototype, "roomList", {
+    get: function get() {
+      return Object.keys(this.rooms);
     }
   });
 
@@ -160,9 +126,8 @@
       if (descriptor.init) descriptor.init.call(this.items[descriptor.key]);
     },
     addExit: function addExit(discriptor) {
-      var key = discriptor.direction.toLocaleLowerCase();
-      this.exits[key] = discriptor;
-      this.exits[key].accessor = this.exits[key].accessor || new RegExp(key);
+      discriptor.accessor = discriptor.accessor || new RegExp(discriptor.key, "i");
+      this.exits[discriptor.key] = discriptor;
     },
     takeItem: function takeItem(item) {
       this.game.inventory[item.key] = item;
@@ -205,12 +170,13 @@
 
     this.actions = this.actions || [];
     this.accessor = this.accessor || new RegExp(this.key);
+    this.name = this.name || this.key;
     this.game = game || null;
     this.room = room || null;
 
     for (var i = 0, l = validGetters.length; i < l; i++) {
       var e = validGetters[i];
-      if (typeof this[e] === 'function') Object.defineProperty(this, e, { get: this[e] });
+      if (typeof this[e] === 'function') Object.defineProperty(this, e, { get: this[e].bind(this) });
     }
   }
 

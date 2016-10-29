@@ -1,25 +1,19 @@
 (function(){
 
-  var directionMap = {
-    "n": "north",
-    "s": "south",
-    "w": "west",
-    "e": "east"
-  }
-
-  var validGetters = ['detail', 'description', 'accessor'];
+  var validGetters = ['detail', 'description', 'accessor', 'name'];
 
   window.TBAEngine = function TBAEngine(){
 
-    this.currentRoom = null;
-    this.rooms = {};
-    this.inventory = {};
-    this.invalidCommand = "Invalid Command";
-    this.emptyInventory = "Empy inventory";
-    this.regExpMatchs = {};
+    this.actions = [];
     this.conditions = [];
+    this.currentRoom = null;
+    this.emptyInventory = "Empy inventory";
+    this.invalidCommand = "Invalid Command";
+    this.invalidExit = "Cannot go there";
+    this.inventory = {};
+    this.rooms = {};
 
-  }
+  };
 
   TBAEngine.prototype = {
 
@@ -33,21 +27,27 @@
       }
       if(ret.length) return ret.join(" ");
 
-
       var input = input.toLocaleLowerCase();
-      var globalCommand = this.globalCommands[this.globalCommands.findIndex(e=>e.command.test(input))];
-      var roomCommand = this.currentRoom.actions? this.currentRoom.actions[this.currentRoom.actions.findIndex(e=>e.command.test(input))]:undefined;
-      var target = this.findTarget(input);
-      var targetCommand = target && target.getCommand(input);
 
-      this.regExpMatchs.globalCommand = globalCommand? globalCommand.command.exec(input):null;
-      this.regExpMatchs.roomCommand = roomCommand? roomCommand.command.exec(input):null;
-      this.regExpMatchs.target = target? target.accessor.exec(input):null;
-      this.regExpMatchs.targetCommand = targetCommand? targetCommand.command.exec(input):null;
+      // get a list of targets including the game and current room
+      var targets = this.findTargets(input, [this,this.currentRoom]);
 
-      if(globalCommand) ret.push(globalCommand.method.call(this, target));
-      if(roomCommand) ret.push(roomCommand.method.call(this.currentRoom));
-      if(targetCommand) ret.push(targetCommand.method.call(target));
+      // call commands on targets
+      for (let i = 0, il = targets.length; i < il; i++) {
+        let target = targets[i];
+        if(!target.actions) continue;
+        for (let j = 0, jl = target.actions.length; j < jl; j++) {
+          let action = target.actions[j];
+          if (action.command.test(input)) {
+            target.regExpMatchs = {
+              target: target.accessor? target.accessor.exec(input):null,
+              command: action.command.exec(input)
+            };
+            ret.push(action.method.call(target));
+          }
+        }
+      }
+
 
       var output = ret.filter(function(n){ return !!n }).join(" ");
       return output.length? output:this.invalidCommand;
@@ -65,64 +65,31 @@
       return new Item(descriptor, null, this);
     },
 
-    findTarget(input) {
-      var targets = 
-        this.currentRoom.itemList.filter(e=>this.currentRoom.items[e].accessor.test(input)).map(e=>this.currentRoom.items[e])
-        .concat(this.inventoryList.filter(e=>this.inventory[e].accessor.test(input)).map(e=>this.inventory[e]));
-      
-      if(targets.length > 1) targets = targets.filter(e=>!!e.getCommand(input));
-        
-      return targets[0];
+    findTargets(input, targets) {
+      return (targets || []).concat(
+        this.currentRoom.itemList.filter(e=>this.currentRoom.items[e].accessor.test(input)).map(e=>this.currentRoom.items[e]),
+        this.inventoryList.filter(e=>this.inventory[e].accessor.test(input)).map(e=>this.inventory[e])
+      );
     },
 
-    enterRoom(room){
+    findTarget(input) {
+      return this.findTargets(input)[0]
+    },
+
+    enterRoom(room) {
       this.currentRoom = room;
       return room.getDescription();
     },
 
-    globalCommands : [
-      {command: /^look(.*)/, method(target){
-        if(!target) {
-          var query = this.regExpMatchs.globalCommand[1].trim();
-          if(query.length) return "Nothing interesting";
-          else target = this.currentRoom;
-        }
-        return target.detail || target.getDescription();
-      }},
-      {command: /^(go|g)\s(.*)/, method(){
-        var direction = this.regExpMatchs.globalCommand[2];
-        if(/^[nesw]$/.test(direction)) direction = directionMap[direction];
+    addGlobalCommand(descriptor) {
+      this.actions.push(descriptor);
+    },
 
-        for (var key in this.currentRoom.exits) {
-          if(this.currentRoom.exits.hasOwnProperty(key)) {
-            if(this.currentRoom.exits[key].accessor.test(direction)) return this.enterRoom(this.currentRoom.exits[key].room);
-          }
-        }
+    removeGlobalCommand(input) {
+      var index = this.actions.findIndex(e => e.command.test(input));
+      this.actions.splice(index, 1);
+    }
 
-        return "Cannot go there.";
-      }},
-      {command: /take/, method(target){
-        if(!target || !target.getCommand("take")) return "Cannot take that.";
-        if(this.inventory[target.key]) return target.key+" already taken";
-      }},
-      {command: /^drop(.*)/, method(target){
-        if(!target) {
-          var query = this.regExpMatchs[1].trim();
-          if(!query.length) return "Drop what?";
-          else return "You're not carrying that.";
-        }
-        if(!target.getCommand("drop")) {
-          if(!this.inventory[target.key]) return "You're not carrying that.";
-          else {
-            this.dropItem(target);
-            return target.key + " dropped.";
-          }
-        }
-      }},
-      {command: /inventory/, method(){
-        return this.inventoryList.length? this.inventoryList.join("\n"): this.emptyInventory;
-      }}
-    ]
 
   };
 
@@ -130,13 +97,17 @@
     get(){return Object.keys(this.inventory)}
   });
 
+  Object.defineProperty(TBAEngine.prototype, "roomList", {
+    get(){return Object.keys(this.rooms)}
+  });
+
   // Room construction -------------
 
   function Room(descriptor, game) {
     Object.assign(this, descriptor);
-    this.items = {};
     this.exits = {};
     this.game = game || null;
+    this.items = {};
 
     for (var i = 0, l = validGetters.length; i < l; i++) {
       var e = validGetters[i];
@@ -153,9 +124,8 @@
     },
 
     addExit(discriptor) {
-      var key = discriptor.direction.toLocaleLowerCase()
-      this.exits[key] = discriptor;
-      this.exits[key].accessor = this.exits[key].accessor || new RegExp(key);
+      discriptor.accessor = discriptor.accessor || new RegExp(discriptor.key, "i");
+      this.exits[discriptor.key] = discriptor;
     },
 
     takeItem(item) {
@@ -190,14 +160,15 @@
   function Item(descriptor, room, game) {
     Object.assign(this, descriptor);
 
-    this.actions = this.actions || [];
     this.accessor = this.accessor || new RegExp(this.key);
+    this.actions = this.actions || [];
     this.game = game || null;
+    this.name = this.name || this.key;
     this.room = room || null;
 
     for (var i = 0, l = validGetters.length; i < l; i++) {
       var e = validGetters[i];
-      if (typeof this[e] === 'function') Object.defineProperty(this, e, {get:this[e]});
+      if (typeof this[e] === 'function') Object.defineProperty(this, e, {get:this[e].bind(this)});
     }
   }
 

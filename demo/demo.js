@@ -1,4 +1,62 @@
 var G = new TBAEngine();
+  var directionMap = {
+    "n": "north",
+    "s": "south",
+    "w": "west",
+    "e": "east"
+  }
+
+G.addGlobalCommand({command: /^look\s?(.*)/, method(){
+  var query = this.regExpMatchs.command[1];
+  var target;
+
+  if(query.length) target = this.findTargets(query);
+  else target = [this.currentRoom];
+
+  if(!target.length) return "Nothing interesting";
+  else return target.map(t => t.detail || t.getDescription()).join(" ");
+}});
+
+G.addGlobalCommand({command: /^(go|g)\s(.*)/, method(){
+  var direction = this.regExpMatchs.command[2];
+  if(/^[nesw]$/.test(direction)) direction = directionMap[direction];
+
+  for (var key in this.currentRoom.exits) {
+    if(this.currentRoom.exits.hasOwnProperty(key)) {
+      if(this.currentRoom.exits[key].accessor.test(direction)) return this.enterRoom(this.currentRoom.exits[key].room);
+    }
+  }
+
+  return this.invalidExit;
+}});
+
+G.addGlobalCommand({command: /take\s?(.*)/, method(){
+  var target = this.findTarget(this.regExpMatchs.command[1]);
+  if(!target || !target.getCommand("take")) return "Cannot take that.";
+  else if(!target.room) return target.key+" already taken";
+}});
+
+G.addGlobalCommand({command: /^drop\s?(.*)/, method(){
+  var query = this.regExpMatchs.command[1];
+  var target = this.findTarget(query);
+  if(!target) {
+    if(!query.length) return "Drop what?";
+    else return "You're not carrying that.";
+  }
+  if(!target.getCommand("drop")) {
+    if(!this.inventory[target.key]) return "You're not carrying that.";
+    else {
+      target.drop();
+      return target.key + " dropped.";
+    }
+  }
+}});
+
+G.addGlobalCommand({command: /inventory/, method(){
+  return this.inventoryList.length? 
+    this.inventoryList.map(e=>this.inventory[e].name).join("\n")
+    : this.emptyInventory;
+}});
 
 G.addCondition({
   failText: "You're dead.",
@@ -34,13 +92,13 @@ G.addRoom({
 });
 
 G.rooms.AllyEnd.addExit({
-  direction: "north", 
+  key: "north", 
   room: G.rooms.Ally,
   description: "the ally continues north."
 });
 
 G.rooms.Ally.addExit({
-  direction: "south", 
+  key: "south", 
   room: G.rooms.AllyEnd,
   description: "the ally continues south."
 });
@@ -50,7 +108,7 @@ G.rooms.AllyEnd.addItem({
   accessor: /trash|paper/,
   description: "Trash blows around your feet.",
   detail: function (){
-    if (this.game.regExpMatchs.target == "paper") return 'written on it is "The magic word is "XYZ"'
+    if (this.game.regExpMatchs.command[1] == "paper") return 'written on it is "The magic word is "XYZ"'
     return "its just some paper.";
   },
   actions: [
@@ -99,28 +157,68 @@ G.rooms.Ally.addItem({
   detail: "It is about the size of two fists.",
   actions: [
     {command: /take/, method: function(){
-      if(!this.game.inventory.rock){
+      if(this.room){
         this.room.takeItem(this);
         return "rock taken";
       }
     }},
     {command: /^throw rock(.*)/, method: function(){
       if(this.room) return "You are not holding the rock.";
-      var targetText = this.game.regExpMatchs.targetCommand[1];
+      var targetText = this.regExpMatchs.command[1];
       var target = this.game.findTarget(targetText);
       this.drop();
-      if(target === this.game.currentRoom.items.light){
+      if(target && target === this.game.currentRoom.items.light){
         this.game.currentRoom.items.light.broken = true;
         return "The rock hits the light. The light shatters.";
       }
       else if(target === demon) {
         return "You throw the rock at the demon. \n"+demon.hitWithRock();
       } 
-      else if(targetText.length) return "You throw the rock, and miss.";
       else return "You throw the rock."
     }}
   ]
 });
+
+var stickDescriptor = {
+  key: "sticks",
+  name: function (){
+    return this.amount > 1? this.amount+" sticks": "A stick";
+  },
+  accessor: /stick(s?)/,
+  description: "There is a pile of sticks in the corner.",
+  detail: function(){
+    return (this.room? "There are ":"You have ")+this.amount+" sticks.";
+  },
+  amount: 10,
+  actions: [
+    {command: /take/, method: function(){
+      if(this.room){
+        if(!this.game.inventory.sticks) {
+          this.game.inventory.sticks = G.createItem(stickDescriptor);
+          this.game.inventory.sticks.amount = 0;
+        }
+        this.amount--;
+        this.game.inventory.sticks.amount++;
+        if(this.amount <= 0) delete this.room.items.sticks;
+        return "You grab a stick.";
+      }
+    }},
+    {command: /drop/, method: function(){
+      if(!this.room){
+        if(!this.game.currentRoom.items.sticks){
+          this.game.currentRoom.addItem(stickDescriptor);
+          this.game.currentRoom.items.sticks.amount = 0;
+        }
+        this.amount--;
+        this.game.currentRoom.items.sticks.amount++;
+        if(this.amount <= 0) delete this.game.inventory.sticks;
+        return "You drop a stick.";
+      }
+    }}
+  ]
+}
+
+G.rooms.AllyEnd.addItem(stickDescriptor);
 
 G.rooms.Hell.addItem({
   key: "tablet",
@@ -133,13 +231,13 @@ var bug = G.createItem({
   accessor: /bug|moth/,
   description: "A bug is flying around.",
   detail: function() {
-    if (this.game.regExpMatchs.target[0] == "moth") return "It is pretty big, but otherwise unremarkable";
+    if (this.game.regExpMatchs.command[1] == "moth") return "It is pretty big, but otherwise unremarkable";
     return "It seems to be a moth."
   },
   actions: [
     {command: /kill|smash|squish/, method: function(){
       this.room.removeItem(this.key);
-      return "You "+this.game.regExpMatchs.targetCommand[0]+" the "+this.game.regExpMatchs.target[0]+" between your palms."
+      return "You "+this.regExpMatchs.command[0]+" the "+this.regExpMatchs.target[0]+" between your palms."
     }},
     {command: /catch|take/, method: function(){
       if(this.room) {
