@@ -1,3 +1,5 @@
+var TBAEngine = require("../dist/TBAEngine.js").default;
+
 var G = new TBAEngine();
   var directionMap = {
     "n": "north",

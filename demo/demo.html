@@ -18,7 +18,9 @@
 <body>
   <input type="text" id="Input" />
   <div id="Output"></div>
-  <script src="../dist/TBAEngine.js"></script>
-  <script src="./demo.js"></script>
+  <script src="../node_modules/systemjs/dist/system.js"></script>
+  <script>
+    System.import("demo.js");
+  </script>
 </body>
 </html>
